@@ -13,6 +13,7 @@ from __future__ import annotations
 import collections
 import ctypes
 import gc
+import logging
 import math
 import queue
 import sys
@@ -27,6 +28,8 @@ from ..drivers import dji, dm, gd
 from ..drivers import dm_protocol as P
 from ..drivers.base import Driver, Feedback
 from .bus import BusError, CanBus, Frame
+
+log = logging.getLogger("canmotorkit.worker")
 
 LIMIT_RIDS = (0x15, 0x16, 0x17)
 NAN = float("nan")
@@ -98,6 +101,7 @@ class Worker(QThread):
         self._frames: list[Frame] = []
         self._last_err_t = 0.0
         self._trip_reported = False
+        self._mit_limited = False
         self._tx_t: float | None = None
         self.latencies: collections.deque[float] = collections.deque(maxlen=5000)
         self.motor_code = -1
@@ -263,9 +267,11 @@ class Worker(QThread):
 
     # ================= 内部 =================
     def _msg(self, s: str):
+        log.info(s)
         self.message.emit(s)
 
     def _err(self, s: str):
+        log.warning(s)
         now = time.perf_counter()
         if now - self._last_err_t > 1.0:
             self._last_err_t = now
@@ -359,9 +365,12 @@ class Worker(QThread):
             self.mode = mode
 
     def _do_set_sending(self, on: bool):
+        if not on and self.sending and self.active and self.driver is not None:
+            # 达妙/HM 未设 can_timeout 时会一直保持最后一帧指令，停发前先下发零输出。
+            self._send_all(self.driver.stop_frames())
+            self._last_out = NAN
+            self._msg("发送已关闭：已先下发零输出，电机仍处于使能状态")
         self.sending = on
-        if not on and self.active:
-            self._msg("发送已关闭，电机仍处于输出状态（可能保持最后指令或触发超时保护）")
 
     # ---------- 量程 ----------
     def _queue_limit_reads(self):
@@ -420,9 +429,8 @@ class Worker(QThread):
                 self._msg("已发送使能")
         else:
             self._sw_en = True
-            if isinstance(d, gd.GdDriver):
-                # 即使还没收到第一帧，开始输出后也必须计时保护。
-                self.safety.last_fb_t = time.perf_counter()
+            # 软件使能的协议（大疆/GD）即使一帧反馈都没收到，开始输出后也必须计时保护。
+            self.safety.arm_watchdog(time.perf_counter())
             self._msg("已使能（软件开关，开始发送电流指令）")
 
     def _do_disable(self):
@@ -1041,8 +1049,8 @@ class Worker(QThread):
             return False
         mit = None
         if isinstance(d, gd.GdDriver):
-            # GD MIT 的前馈可能为零但位置/速度增益仍会输出，不能只按 t 判断。
-            self.safety.filter_output(now, 1.0)
+            # GD 原生/MIT 模式的前馈可能为零但增益仍会出力，不能只按 t 判断。
+            self.safety.check_timeout(now, True)
             if self.safety.tripped:
                 self._on_trip()
         if self.safety.tripped or not d.ready:
@@ -1081,11 +1089,17 @@ class Worker(QThread):
                         fr, out = d.control_frames(kind, values), NAN
             elif self.mode == "mit" and d.caps.mit:
                 cmd = self.get_target()
-                cmd.t = self.safety.filter_output(now, cmd.t)
+                fb = self.last_fb
+                p, v, kp, kd, t, limited = self.safety.filter_mit(
+                    now, cmd.p, cmd.v, cmd.kp, cmd.kd, cmd.t,
+                    fb.pos if fb is not None else None, fb.vel if fb is not None else None)
+                if limited and not self._mit_limited:
+                    self._msg("MIT 等效扭矩 kp·Δp+kd·Δv+t 超出左侧限幅，已自动收缩位置目标/前馈")
+                self._mit_limited = limited
                 L = self.lim
-                mit = P.MitCommand(P.clamp(cmd.p, L.p_min, L.p_max), P.clamp(cmd.v, L.v_min, L.v_max),
-                                   P.clamp(cmd.kp, L.kp_min, L.kp_max),
-                                   P.clamp(cmd.kd, L.kd_min, L.kd_max), P.clamp(cmd.t, L.t_min, L.t_max))
+                mit = P.MitCommand(P.clamp(p, L.p_min, L.p_max), P.clamp(v, L.v_min, L.v_max),
+                                   P.clamp(kp, L.kp_min, L.kp_max),
+                                   P.clamp(kd, L.kd_min, L.kd_max), P.clamp(t, L.t_min, L.t_max))
                 out = mit.t
                 fr = d.mit_frames(mit)
             else:

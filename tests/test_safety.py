@@ -40,3 +40,49 @@ def test_feedback_timeout_only_when_output():
     s.on_feedback(0.0, 0, 0, 0)
     assert s.filter_output(1.0, 0.0) == 0.0 and not s.tripped
     assert s.filter_output(1.0, 0.5) == 0.0 and s.tripped and "超时" in s.reason
+
+
+def _tau(p, v, kp, kd, t, pos, vel):
+    return kp * (p - pos) + kd * (v - vel) + t
+
+
+def test_mit_equivalent_torque_limited_by_shifting_position():
+    s = Supervisor(SafetyLimits(vel_max=5, out_max=1.0, temp_max=0, fb_timeout=0))
+    s.on_feedback(0.0, 0.0, 0.0, 30)
+    # kp=50、目标偏 1 rad → 估算 50 Nm，只限 t 时完全无约束
+    p, v, kp, kd, t, limited = s.filter_mit(0.0, 1.0, 0.0, 50.0, 1.0, 0.0, pos=0.0, vel=0.0)
+    assert limited and kp == 50.0 and kd == 1.0
+    assert abs(_tau(p, v, kp, kd, t, 0.0, 0.0) - 1.0) < 1e-9
+    p, v, kp, kd, t, limited = s.filter_mit(0.0, -1.0, 0.0, 50.0, 1.0, 0.0, pos=0.0, vel=0.0)
+    assert abs(_tau(p, v, kp, kd, t, 0.0, 0.0) + 1.0) < 1e-9
+
+
+def test_mit_within_limit_untouched_and_velocity_target_clamped():
+    s = Supervisor(SafetyLimits(vel_max=5, out_max=1.0, temp_max=0, fb_timeout=0))
+    s.on_feedback(0.0, 0.0, 0.0, 30)
+    assert s.filter_mit(0.0, 0.01, 0.0, 10.0, 0.0, 0.5, 0.0, 0.0) == (0.01, 0.0, 10.0, 0.0, 0.5, False)
+    p, v, kp, kd, t, limited = s.filter_mit(0.0, 0.0, 20.0, 0.0, 0.01, 0.0, 0.0, 0.0)
+    assert v == 5.0 and limited
+
+
+def test_mit_pure_damping_scales_kd():
+    s = Supervisor(SafetyLimits(vel_max=0, vel_enabled=False, out_max=1.0, temp_max=0, fb_timeout=0))
+    s.on_feedback(0.0, 0.0, 0.0, 30)
+    p, v, kp, kd, t, limited = s.filter_mit(0.0, 0.0, 10.0, 0.0, 5.0, 0.0, 0.0, 0.0)
+    assert limited and abs(_tau(p, v, kp, kd, t, 0.0, 0.0) - 1.0) < 1e-9
+
+
+def test_mit_watchdog_counts_gains_and_tripped_zeroes():
+    s = Supervisor(SafetyLimits(vel_max=0, temp_max=0, fb_timeout=0.1))
+    s.on_feedback(0.0, 0.0, 0.0, 0)
+    # t=0 但 kp≠0 仍会出力，反馈超时必须触发
+    out = s.filter_mit(1.0, 0.5, 0.0, 10.0, 0.0, 0.0, 0.0, 0.0)
+    assert s.tripped and out == (0.0, 0.0, 0.0, 0.0, 0.0, False)
+
+
+def test_watchdog_armed_without_any_feedback():
+    s = Supervisor(SafetyLimits(vel_max=0, temp_max=0, fb_timeout=0.1))
+    assert s.filter_output(5.0, 0.5) == 0.5 and not s.tripped   # 未启动输出：不计时
+    s.arm_watchdog(10.0)
+    assert s.filter_output(10.05, 0.5) == 0.5
+    assert s.filter_output(10.2, 0.5) == 0.0 and s.tripped

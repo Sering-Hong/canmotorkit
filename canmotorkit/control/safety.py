@@ -104,14 +104,69 @@ class Supervisor:
             self.mt.turns = 0
             self.pos = self.mt.last
 
+    def arm_watchdog(self, now: float):
+        """开始输出时启动反馈看门狗：即使一帧反馈都没收到，超时也要触发。"""
+        if self.last_fb_t is None or now > self.last_fb_t:
+            self.last_fb_t = now
+
+    def check_timeout(self, now: float, driving: bool = True):
+        """电机可能出力（driving）时检查反馈超时。"""
+        L = self.limits
+        if (not self.tripped and driving and L.fb_timeout > 0 and self.last_fb_t is not None
+                and now - self.last_fb_t > L.fb_timeout):
+            self.trip(f"反馈超时 >{L.fb_timeout * 1000:.0f} ms")
+
     def filter_output(self, now: float, out: float) -> float:
         """返回允许输出的电流/扭矩。已触发 → 0；否则限幅。"""
         L = self.limits
-        if (not self.tripped and L.fb_timeout > 0 and out != 0.0 and self.last_fb_t is not None
-                and now - self.last_fb_t > L.fb_timeout):
-            self.trip(f"反馈超时 >{L.fb_timeout * 1000:.0f} ms")
+        self.check_timeout(now, out != 0.0)
         if self.tripped:
             return 0.0
         if L.out_enabled and L.out_max > 0:
             out = max(-L.out_max, min(L.out_max, out))
         return out
+
+    def filter_mit(self, now: float, p: float, v: float, kp: float, kd: float, t: float,
+                   pos: float | None, vel: float | None) -> tuple[float, float, float, float, float, bool]:
+        """MIT 指令的安全过滤，返回 (p, v, kp, kd, t, 是否被限幅)。
+
+        电机端实际扭矩 τ = kp·(p−θ) + kd·(v−ω) + t，只限前馈 t 无法约束 kp/kd 产生的扭矩。
+        这里用最近一次反馈 (θ, ω) 估算 τ：
+        - 速度目标 v 限制在速度上限内；
+        - 先把前馈 t 限到 ±out_max，再在 kp>0 时把位置目标 p 拉向 θ，使估算 τ 落在 ±out_max；
+          kp=0 时只能缩减阻尼项不可控部分，退而把 t 反向补偿。
+        估算基于上一帧反馈，存在一个通信周期的滞后，电机内部仍有自身 t_max 限幅。
+        已锁存或反馈超时 → 全 0（零扭矩）。
+        """
+        L = self.limits
+        driving = kp != 0.0 or kd != 0.0 or t != 0.0
+        self.check_timeout(now, driving)
+        if self.tripped:
+            return 0.0, 0.0, 0.0, 0.0, 0.0, False
+        limited = False
+        if L.vel_enabled and L.vel_max > 0 and abs(v) > L.vel_max:
+            v = max(-L.vel_max, min(L.vel_max, v))
+            limited = True
+        if not (L.out_enabled and L.out_max > 0):
+            return p, v, kp, kd, t, limited
+        m = L.out_max
+        if abs(t) > m:
+            t = max(-m, min(m, t))
+            limited = True
+        if pos is None or vel is None or not (math.isfinite(pos) and math.isfinite(vel)):
+            return p, v, kp, kd, t, limited
+        damp = kd * (v - vel)
+        tau = kp * (p - pos) + damp + t
+        if abs(tau) <= m:
+            return p, v, kp, kd, t, limited
+        target = math.copysign(m, tau)
+        if kp > 0:
+            p = pos + (target - damp - t) / kp
+        else:
+            t_new = max(-m, min(m, target - damp))
+            if abs(damp + t_new) <= m:
+                t = t_new
+            elif v != vel:
+                # 阻尼项单独已超限：保留前馈，减小 kd 使总扭矩落在限幅上。
+                kd = max(0.0, (target - t) / (v - vel))
+        return p, v, kp, kd, t, True

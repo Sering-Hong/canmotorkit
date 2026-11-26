@@ -37,6 +37,7 @@ class _Pid:
         self.d_fc = max(0.0, d_fc)
         self.err = 0.0
         self.last_err = 0.0
+        self._first = True
         self.i_out = 0.0
         self.d_out = 0.0
         self.out = 0.0
@@ -46,7 +47,12 @@ class _Pid:
 
     def calculate(self, error: float, dt: float, derr: float | None = None) -> float:
         dt = min(max(dt, 1.0e-4), 0.01)
-        self.err = _lowpass(self.err, error, self.err_fc, dt)
+        if self._first:
+            # 首拍：误差滤波器从当前误差起步，差分微分取 0，避免 kd·err/dt 的冲击。
+            self._first = False
+            self.err = self.last_err = error
+        else:
+            self.err = _lowpass(self.err, error, self.err_fc, dt)
         self.i_out = max(-self.max_i, min(self.max_i, self.i_out + self.ki * self.err * dt))
         d = self.kd * (derr if derr is not None else (self.err - self.last_err) / dt)
         self.d_out = _lowpass(self.d_out, d, self.d_fc, dt)
@@ -308,6 +314,9 @@ class LoopRun(Run):
             return None
         if fb is None:
             return 0.0
+        if c.loop != "pos_single" and not math.isfinite(fb.vel):
+            # 6623 等需估算速度的电机刚开始时速度为 NaN，不能进入积分器（会永久变 NaN）。
+            return 0.0
         r = self.reference(t)
         self.ref = r
         dt = 0.0 if self.prev_t is None else max(0.0, now - self.prev_t)
@@ -315,10 +324,12 @@ class LoopRun(Run):
         if c.loop == "vel":
             u = self.inner_pid.calculate(r - fb.vel, dt)
         elif self.legacy_position:
-            derr = -fb.vel if c.d_on_meas else 0.0
+            # 微分作用于测量：d(err)/dt ≈ -ω（参考阶跃不产生冲击）；否则对误差差分。
+            derr = -fb.vel if c.d_on_meas and math.isfinite(fb.vel) else None
             u = self.inner_pid.calculate(r - pos_mt, dt, derr)
         else:
-            speed_ref = self.outer_pid.calculate(r - pos_mt, dt)
+            derr = -fb.vel if c.d_on_meas and math.isfinite(fb.vel) else None
+            speed_ref = self.outer_pid.calculate(r - pos_mt, dt, derr)
             u = self.inner_pid.calculate(speed_ref - fb.vel, dt)
         self.n += 1
         if abs(u) >= self.inner_pid.max_out > 0:
