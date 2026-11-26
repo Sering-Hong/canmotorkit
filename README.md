@@ -1,10 +1,12 @@
 # CanMotorKit
 
 基于 PEAK PCAN / Windows SLCAN / Linux SocketCAN 的 CAN 电机调试与测试工具。约定见 `AGENTS.md`，待办见 `TODO.md`，厂家资料见 `reference/`。
-当前已实现达妙/HM（MIT + 0x7FF），在 HM9816G9 实机验证通信；大疆等见 TODO。
+当前支持达妙/HM（MIT + 0x7FF，HM9816G9 实机验证通信）、大疆 RoboMaster、高擎 GD；PCAN / SLCAN / SocketCAN / 演示台。
 
 ## 安装 / 运行
 ```
+python -m venv .venv
+.venv\Scripts\activate  # 可选：独立环境（Linux: source .venv/bin/activate）
 pip install -r requirements.txt
 python main.py          # 真实硬件（需安装 PEAK 驱动，PCANBasic.dll）
 python main.py --sim    # 演示台（虚拟电机），也可在通道下拉选「演示台」
@@ -35,8 +37,23 @@ Windows 使用 Canable2 时，程序按 USB VID/PID 自动发现设备并显示�
 
 ## 安全
 - 左栏「安全限制 / 急停」：速度上限、电流/扭矩限幅、位置窗口（多圈累计）、温度、反馈超时。
+- 速度上限与输出限幅**默认启用**（扭矩 ≤1 Nm，电流取协议上限 10%，速度 20 rad/s），
+  按「协议/型号」记忆上次的设置。
+- **MIT 等效扭矩限幅**：电机实际扭矩为 τ = kp·(p−θ) + kd·(v−ω) + t。上位机用最近一帧反馈估算 τ，
+  超出扭矩限幅时自动把位置目标 p 拉近当前位置（kp=0 时缩小前馈或 kd），速度目标 v 受速度上限约束；
+  估算有一个通信周期的滞后。只要 kp/kd/t 任一非零，反馈超时保护即生效。
 - 急停（按钮 / Esc / 空格）与超限均为**零扭矩并锁存**，不失能；状态栏红色显示原因，
   点「解除锁存」后恢复发送已应用参数。失能只由用户点「失能」。
+- 关闭「发送」前会先下发一帧零输出（达妙/HM 未设 can_timeout 时会一直保持最后一帧指令）。
+- 大疆/GD 等软件使能的电机，点「开始输出」即启动反馈看门狗，一帧反馈都收不到也会触发零输出。
+
+## 界面与设置
+- 右上角「设置」→「外观设置…」：选择背景图，调节背景不透明度、遮罩强度、面板不透明度和强调色，
+  实时预览；不透明度/遮罩/强调色按深色、浅色模式**分别记忆**，背景图路径共用。
+- 自动记忆：窗口位置与大小、左右栏宽度、连接通道与波特率、发送频率、各型号的安全限制。
+  「设置」→「重置窗口布局」可恢复默认布局。
+- 日志：`%LOCALAPPDATA%\CanMotorKit\logs\canmotorkit.log`（「设置」→「打开日志目录」）。
+  未处理的异常会写入日志并弹窗提示，不会静默崩溃；`python main.py --debug` 记录调试信息。
 
 ## 状态码（状态帧 d0 高 4 位）
 | 码 | 含义 |

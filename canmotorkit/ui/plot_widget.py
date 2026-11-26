@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel,
                                QMessageBox, QPushButton, QVBoxLayout, QWidget)
 
+from . import theme
 from .widgets import (CheckBox, SelectedFirstComboBox, equalize_graphics_rows,
                       set_legend_text_color)
 
@@ -133,9 +134,9 @@ class PlotWidget(QWidget):
 
     def apply_theme(self, dark: bool):
         """同步曲线绘图区、坐标轴和图例的前景色。"""
-        background = "#202020" if dark else "#ffffff"
-        foreground = "#f1f1f1" if dark else "#202020"
-        grid = "#707070" if dark else "#b0b0b0"
+        background = theme.current().plot_bg()
+        foreground = theme.current().pal.text
+        grid = theme.current().pal.grid
         self.glw.setBackground(background)
         for plot in self.plots:
             for axis_name in ("left", "bottom", "right", "top"):

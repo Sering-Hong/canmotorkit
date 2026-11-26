@@ -32,7 +32,8 @@ class ConnectionPanel(QGroupBox):
         self.cb_baud.addItems(list(BAUDRATES))
         self.cb_baud.setToolTip("PCAN 由本程序设置；SocketCAN 由 Linux ip link 设置")
         self.btn_connect = QPushButton("连接")
-        self.btn_connect.setMinimumHeight(30)
+        self.btn_connect.setObjectName("primary")
+        self.btn_connect.setMinimumHeight(32)
         f = QFormLayout(self)
         f.addRow("通道", row)
         f.addRow("波特率", self.cb_baud)
@@ -42,6 +43,30 @@ class ConnectionPanel(QGroupBox):
         self.btn_connect.clicked.connect(self._on_click)
         self.cb_channel.currentIndexChanged.connect(self._channel_changed)
         self.refresh_channels()
+        self.load_settings()
+
+    # ---- 记忆上次的通道与波特率 ----
+    def load_settings(self, s=None):
+        from .theme import settings
+        s = s or settings()
+        baud = s.value("conn/baud")
+        if baud and self.cb_baud.findText(str(baud)) >= 0:
+            self.cb_baud.setCurrentText(str(baud))
+        kind, handle = s.value("conn/kind"), s.value("conn/channel")
+        if kind is None:
+            return
+        for i in range(self.cb_channel.count()):
+            k, h = self.cb_channel.itemData(i)
+            if k == kind and str(h) == str(handle):
+                self.cb_channel.setCurrentIndex(i)
+                break
+
+    def save_settings(self, s):
+        data = self.cb_channel.currentData()
+        if data:
+            s.setValue("conn/kind", data[0])
+            s.setValue("conn/channel", str(data[1]))
+        s.setValue("conn/baud", self.cb_baud.currentText())
 
     def refresh_channels(self):
         self.cb_channel.clear()

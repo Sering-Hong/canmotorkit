@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QComboBox, QFileDialog, QFormLayout, QGroupBox,
 from canmotorkit.analysis import sysid
 from canmotorkit.analysis.runs import EXCITE_KINDS, ExciteConfig, ExciteRun
 
+from . import theme
 from .widgets import (AdaptiveDoubleSpinBox, CheckBox, SelectedFirstComboBox,
                       equalize_graphics_rows, set_legend_text_color)
 
@@ -296,8 +297,8 @@ class TestTab(QWidget):
 
     def apply_theme(self, dark: bool):
         """同步响应测试曲线的背景、坐标轴和图例颜色。"""
-        background = "#202020" if dark else "#ffffff"
-        foreground = "#f1f1f1" if dark else "#202020"
+        background = theme.current().plot_bg()
+        foreground = theme.current().pal.text
         self.glw.setBackground(background)
         for plot in (self.p_mag, self.p_ph, self.p_out, self.p_cl):
             for axis_name in ("left", "bottom", "right", "top"):

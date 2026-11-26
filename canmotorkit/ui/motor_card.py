@@ -35,7 +35,13 @@ class MotorCard(QFrame):
         self.btn_zero = btn("设零点", "当前位置设为零点（需失能）")
         self.sp_rate = QSpinBox()
         self.sp_rate.setRange(10, 1000)
-        self.sp_rate.setValue(1000)
+        from .theme import settings
+        try:
+            rate = int(settings().value("card/rate_hz", 1000))
+        except (TypeError, ValueError):
+            rate = 1000
+        self.sp_rate.setValue(max(10, min(1000, rate)))
+        self.sp_rate.setToolTip("控制帧/查询帧的发送频率；退出时记忆")
         self.sp_rate.setSuffix(" Hz")
         self.lbl_rate = QLabel("—")
         self.lbl_rate.setMinimumWidth(0)
@@ -102,6 +108,9 @@ class MotorCard(QFrame):
         self.btn_en.setText("使能" if d.caps.enable_cmd else "开始输出")
         self.btn_dis.setText("失能" if d.caps.enable_cmd else "停止输出")
         self.btn_en.setStyleSheet("")
+
+    def save_settings(self, s):
+        s.setValue("card/rate_hz", self.sp_rate.value())
 
     def _rate(self):
         if self.worker:

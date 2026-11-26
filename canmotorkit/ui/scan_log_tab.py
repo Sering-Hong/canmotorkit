@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDoubleSpinBox, QFi
 
 from canmotorkit.drivers import dm_protocol as P
 
+from . import theme
 from .widgets import CheckBox
 
 
@@ -175,8 +176,8 @@ class ScanLogTab(QWidget):
 
     def apply_theme(self, dark: bool):
         """同步延迟直方图的背景、坐标轴和图例颜色。"""
-        background = "#202020" if dark else "#ffffff"
-        foreground = "#f1f1f1" if dark else "#202020"
+        background = theme.current().plot_bg()
+        foreground = theme.current().pal.text
         self.hist.setBackground(background)
         for axis_name in ("left", "bottom", "right", "top"):
             axis = self.hist.getPlotItem().getAxis(axis_name)

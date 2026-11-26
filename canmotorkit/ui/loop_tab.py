@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QComboBox, QFormLayout, QGridLayout, QGroupBox, Q
 from canmotorkit.analysis import sysid
 from canmotorkit.analysis.runs import LOOP_KINDS, REF_KINDS, LoopConfig, LoopRun
 
+from . import theme
 from .test_tab import dspin
 from .widgets import (CheckBox, SelectedFirstComboBox, equalize_graphics_rows,
                       set_legend_text_color)
@@ -304,8 +305,8 @@ class LoopTab(QWidget):
 
     def apply_theme(self, dark: bool):
         """同步闭环测试曲线的背景、坐标轴和图例颜色。"""
-        background = "#202020" if dark else "#ffffff"
-        foreground = "#f1f1f1" if dark else "#202020"
+        background = theme.current().plot_bg()
+        foreground = theme.current().pal.text
         self.glw.setBackground(background)
         for plot in (self.p_y, self.p_u):
             for axis_name in ("left", "bottom", "right", "top"):

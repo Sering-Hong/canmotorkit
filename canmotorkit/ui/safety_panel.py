@@ -51,8 +51,14 @@ class SafetyPanel(QGroupBox):
         self.btn_estop = QPushButton("急停（零扭矩）  [Esc / 空格]")
         self.btn_estop.setFocusPolicy(Qt.NoFocus)
         self.btn_estop.setMinimumHeight(40)
-        self.btn_estop.setStyleSheet("QPushButton{background:#c62828;color:white;font-weight:bold;"
-                                     "font-size:15px}QPushButton:disabled{background:#9e9e9e;color:#202020}")
+        self.btn_estop.setObjectName("estop")
+        self.btn_estop.setStyleSheet(
+            "QPushButton#estop{background:#d32f2f;color:white;font-weight:bold;font-size:15px;"
+            "border:1px solid #b71c1c;border-radius:8px}"
+            "QPushButton#estop:hover{background:#e53935}"
+            "QPushButton#estop:pressed{background:#b71c1c}"
+            "QPushButton#estop:disabled{background:rgba(158,158,158,150);color:#eeeeee;"
+            "border-color:rgba(120,120,120,150)}")
         self.btn_estop.setToolTip("发送 kp=kd=t=0 并锁存，电机保持使能（失能会猛刹车）。\n"
                                   "需要失能请点击上方「失能」。")
         self.lbl_state = QLabel("安全：")
@@ -180,8 +186,12 @@ class SafetyPanel(QGroupBox):
             return
 
         defaults = SafetyLimits()
-        ui_vel_max = 50.0
-        ui_out_max = min(20.0, max(0.0, float(d.out_max)))
+        # 保守默认值并默认启用：扭矩 ≤1 Nm（AGENTS 实机约定），电流取协议上限的 10%。
+        ui_vel_max = 20.0
+        if self._output_kind == "torque":
+            ui_out_max = min(1.0, max(0.0, float(d.out_max)))
+        else:
+            ui_out_max = round(0.1 * max(0.0, float(d.out_max)), 3)
         self.sp_current.setRange(0.0, max(1000.0, float(d.out_max)))
         out_unit = d.out_unit if self._output_kind == "current" else "Nm"
         self._fill_spin(self.sp_vel, ui_vel_max, "± ", " rad/s")
@@ -197,7 +207,7 @@ class SafetyPanel(QGroupBox):
                               (self.chk_current, self._output_kind == "current"),
                               (self.chk_torque, self._output_kind == "torque")):
             check.blockSignals(True)
-            check.setChecked(False)
+            check.setChecked(active)
             check.setEnabled(active)
             check.blockSignals(False)
         self.chk_pos.blockSignals(True)
@@ -208,6 +218,7 @@ class SafetyPanel(QGroupBox):
         self._fill_spin(self.sp_pmax, defaults.pos_max, "", " rad")
         self._fill_spin(self.sp_temp, defaults.temp_max, "", " ℃")
         self._fill_spin(self.sp_to, defaults.fb_timeout * 1000, "", " ms")
+        self._restore_for(d)
         self._update_buttons()
         self._push()
 
@@ -272,8 +283,62 @@ class SafetyPanel(QGroupBox):
             self._push()
         return changed
 
+    # ---- 按「协议/型号」记忆 ----
+    def _key(self, d=None) -> str:
+        d = d or self.driver
+        return f"safety/{d.protocol}/{d.model}".replace(" ", "_")
+
+    def _restore_for(self, d):
+        from .theme import settings
+        s = settings()
+        base = self._key(d)
+        if s.value(base + "/saved") is None:
+            return
+        out_spin = self.sp_current if self._output_kind == "current" else self.sp_torque
+        out_chk = self.chk_current if self._output_kind == "current" else self.chk_torque
+
+        def num(name, spin):
+            try:
+                v = float(s.value(f"{base}/{name}"))
+            except (TypeError, ValueError):
+                return
+            spin.blockSignals(True)
+            spin.setValue(v)
+            spin.blockSignals(False)
+
+        def flag(name, chk):
+            v = s.value(f"{base}/{name}")
+            if v is not None and chk.isEnabled():
+                chk.blockSignals(True)
+                chk.setChecked(v in (True, "true", "1", 1))
+                chk.blockSignals(False)
+        num("vel_max", self.sp_vel)
+        num("out_max", out_spin)
+        num("pos_min", self.sp_pmin)
+        num("pos_max", self.sp_pmax)
+        num("temp_max", self.sp_temp)
+        num("fb_timeout_ms", self.sp_to)
+        flag("vel_enabled", self.chk_vel)
+        flag("out_enabled", out_chk)
+        flag("pos_enabled", self.chk_pos)
+
+    def save_settings(self, s):
+        if self.driver is None:
+            return
+        lim = self.limits()
+        base = self._key()
+        for name, value in (("vel_max", lim.vel_max), ("out_max", lim.out_max),
+                            ("pos_min", lim.pos_min), ("pos_max", lim.pos_max),
+                            ("temp_max", lim.temp_max), ("fb_timeout_ms", lim.fb_timeout * 1000),
+                            ("vel_enabled", lim.vel_enabled), ("out_enabled", lim.out_enabled),
+                            ("pos_enabled", lim.pos_enabled), ("saved", True)):
+            s.setValue(f"{base}/{name}", value)
+
     def _push(self):
         lim = self.limits()
+        if self.driver is not None:
+            from .theme import settings
+            self.save_settings(settings())
         if self.worker:
             self.worker.set_safety_limits(lim)
         self.limits_changed.emit(lim.out_max if self.driver is not None and lim.out_enabled else 0.0)
@@ -283,9 +348,13 @@ class SafetyPanel(QGroupBox):
             return
         if s.get("tripped"):
             self.lbl_state.setText("⛔ 已触发零扭矩：" + s.get("trip_reason", ""))
-            self.lbl_state.setStyleSheet("background:#c62828;color:white;font-weight:bold;padding:2px")
+            self.lbl_state.setStyleSheet("background:#c62828;color:white;font-weight:bold;"
+                                         "padding:3px;border-radius:5px")
             self.btn_reset.setEnabled(True)
         else:
             self.lbl_state.setText("安全：正常")
-            self.lbl_state.setStyleSheet("background:#e8f5e9;color:#2e7d32;padding:2px")
+            from .theme import current
+            fg = "#a5d6a7" if current().dark else "#2e7d32"
+            self.lbl_state.setStyleSheet(f"background:rgba(102,187,106,60);color:{fg};"
+                                         "font-weight:bold;padding:3px;border-radius:5px")
             self.btn_reset.setEnabled(False)

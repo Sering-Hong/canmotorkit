@@ -15,12 +15,11 @@ from .gd_panel import GdControl
 
 
 def _spin_style(dark: bool) -> str:
-    """让目标值框使用与置零按钮一致的底色，并保留禁用态对比度。"""
-    if dark:
-        return ("QDoubleSpinBox{background:#3a3a3a;color:#f1f1f1;}"
-                "QDoubleSpinBox:disabled{background:#292929;color:#777777;}")
-    return ("QDoubleSpinBox{background:#e2e2e2;color:#202020;}"
-            "QDoubleSpinBox:disabled{background:#eeeeee;color:#777777;}")
+    """让目标值框使用与置零按钮一致的底色（跟随主题），并保留禁用态对比度。"""
+    from .theme import current
+    p = current().pal
+    return (f"QDoubleSpinBox{{background:{p.button};color:{p.text};}}"
+            f"QDoubleSpinBox:disabled{{background:{p.disabled_bg};color:{p.text_disabled};}}")
 
 
 class _Row:

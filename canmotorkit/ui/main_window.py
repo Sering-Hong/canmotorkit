@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QSettings, QTimer, Qt
+from PySide6.QtCore import QEvent, QObject, QPoint, QTimer, Qt
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLabel, QLineEdit, QMainWindow,
                                QHBoxLayout, QMenu, QMessageBox, QPlainTextEdit, QScrollArea,
                                QSizePolicy, QSplitter, QTabWidget, QTableWidget, QPushButton,
                                QVBoxLayout, QWidget)
 
-from canmotorkit import APP_NAME
+from canmotorkit import APP_NAME, __version__
 from canmotorkit.core.bus import PcanBus
 from canmotorkit.core.worker import Worker
 from canmotorkit.core.slcan import SlcanBus
@@ -24,339 +24,13 @@ from .motor_card import MotorCard
 from .motor_list import MotorListPanel
 from .plot_widget import PlotWidget
 from .register_tab import RegisterTab
+from . import theme
+from .appearance_dialog import AppearanceDialog
 from .safety_panel import SafetyPanel
 from .scan_log_tab import ScanLogTab
 from .test_tab import TestTab
 
 TEXT_INPUTS = (QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTableWidget)
-
-MAIN_STYLE = """
-QMainWindow {
-    background: #171717;
-    color: #f1f1f1;
-}
-QWidget {
-    color: #f1f1f1;
-}
-QWidget#leftColumn, QScrollArea#leftScroll,
-QScrollArea#leftScroll > QWidget > QWidget {
-    background: #2b2b2b;
-}
-QWidget#rightColumn, QTabWidget#mainTabs,
-QTabWidget#mainTabs::pane, QTabWidget#mainTabs QStackedWidget,
-QTabWidget#mainTabs QStackedWidget > QWidget {
-    background: #171717;
-}
-QScrollArea#controlScroll, QScrollArea#controlScroll > QWidget > QWidget,
-QWidget#controlPage {
-    background: #171717;
-}
-QWidget#controlPage QTabWidget,
-QWidget#controlPage QTabWidget::pane,
-QWidget#controlPage QTabWidget QStackedWidget,
-QWidget#controlPage QTabWidget QStackedWidget > QWidget {
-    background: #242424;
-}
-QScrollArea#loopScroll, QScrollArea#loopScroll > QWidget > QWidget,
-QSplitter#loopSplitter > QWidget,
-QSplitter#testSplitter > QWidget {
-    background: #171717;
-}
-QSplitter#mainSplitter::handle {
-    background: transparent;
-}
-QSplitter#loopSplitter::handle {
-    background: transparent;
-}
-QSplitter#mainSplitter::handle:hover,
-QSplitter#loopSplitter::handle:hover {
-    background: transparent;
-}
-QGroupBox, QFrame {
-    background: #242424;
-    border: 1px solid #444444;
-    border-radius: 3px;
-}
-QGroupBox {
-    padding-top: 8px;
-}
-QGroupBox::title {
-    color: #f1f1f1;
-    subcontrol-origin: padding;
-    subcontrol-position: top left;
-    padding: 0 4px;
-    background: #242424;
-}
-QTabWidget::pane {
-    background: #202020;
-    border: 1px solid #444444;
-}
-QProgressBar {
-    background: #202020;
-    color: #f1f1f1;
-    border: 1px solid #555555;
-    text-align: center;
-}
-QProgressBar::chunk {
-    background: #202020;
-}
-QPushButton, QToolButton {
-    background: #3a3a3a;
-    color: #f1f1f1;
-    border: 1px solid #555555;
-    border-radius: 3px;
-    padding: 4px 9px;
-}
-QPushButton:hover, QToolButton:hover {
-    background: #4a4a4a;
-    border-color: #737373;
-}
-QPushButton:pressed, QToolButton:pressed {
-    background: #303030;
-}
-QPushButton:disabled, QToolButton:disabled {
-    background: #292929;
-    color: #777777;
-    border-color: #3b3b3b;
-}
-QLineEdit, QPlainTextEdit, QAbstractSpinBox, QComboBox, QTableWidget {
-    background: #202020;
-    color: #f1f1f1;
-    border: 1px solid #555555;
-    selection-background-color: #356a9a;
-    selection-color: #ffffff;
-}
-QTableWidget#scanLogTable {
-    background: #202020;
-    alternate-background-color: #2b2b2b;
-    color: #d4d4d4;
-    gridline-color: #3a3a3a;
-    selection-background-color: #4a4a4a;
-    selection-color: #f1f1f1;
-}
-QTableWidget#scanLogTable::item:selected {
-    background: #4a4a4a;
-    color: #f1f1f1;
-}
-QHeaderView::section {
-    background: #303030;
-    color: #f1f1f1;
-    border: 1px solid #555555;
-    padding: 4px 6px;
-}
-QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
-    width: 0px;
-    height: 0px;
-    border: none;
-    background: transparent;
-}
-QAbstractSpinBox::up-arrow, QAbstractSpinBox::down-arrow {
-    width: 0px;
-    height: 0px;
-}
-QComboBox QAbstractItemView {
-    background: #242424;
-    color: #f1f1f1;
-    selection-background-color: #356a9a;
-}
-QMenu {
-    background: #242424;
-    color: #f1f1f1;
-    border: 1px solid #555555;
-    padding: 3px;
-}
-QMenu::item {
-    padding: 5px 28px 5px 8px;
-}
-QMenu::item:selected {
-    background: #356a9a;
-    color: #ffffff;
-}
-QMenu::item:disabled {
-    color: #777777;
-}
-QMenu::separator {
-    height: 1px;
-    background: #444444;
-    margin: 3px 5px;
-}
-QToolTip {
-    background: #242424;
-    color: #f1f1f1;
-    border: 1px solid #777777;
-    padding: 3px;
-}
-QStatusBar {
-    background: #242424;
-    color: #f1f1f1;
-}
-QLabel[themeRole="muted"] {
-    color: #aaaaaa;
-}
-QLabel[themeRole="note"] {
-    color: #d6b06a;
-}
-QCheckBox, QRadioButton {
-    color: #f1f1f1;
-}
-QCheckBox::indicator {
-    width: 14px;
-    height: 14px;
-    background: #202020;
-    border: 1px solid #777777;
-    border-radius: 2px;
-}
-QCheckBox::indicator:hover {
-    border-color: #bdbdbd;
-}
-QCheckBox::indicator:checked {
-    background: #202020;
-    border-color: #d0d0d0;
-}
-QCheckBox::indicator:disabled {
-    background: #292929;
-    border-color: #4a4a4a;
-}
-QTabBar::tab {
-    background: #2b2b2b;
-    color: #c8c8c8;
-    border: 1px solid #444444;
-    padding: 5px 10px;
-}
-QTabBar::tab:selected {
-    background: #3e3e3e;
-    color: #ffffff;
-}
-QScrollBar:vertical, QScrollBar:horizontal {
-    background: #202020;
-}
-QScrollBar:vertical {
-    width: 16px;
-    margin: 16px 0 16px 0;
-}
-QScrollBar:horizontal {
-    height: 16px;
-    margin: 0 16px 0 16px;
-}
-QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-    background: #555555;
-    min-height: 24px;
-    min-width: 24px;
-}
-QScrollBar::sub-line:vertical, QScrollBar::add-line:vertical,
-QScrollBar::sub-line:horizontal, QScrollBar::add-line:horizontal {
-    subcontrol-origin: margin;
-}
-QScrollBar::sub-line:vertical, QScrollBar::add-line:vertical {
-    height: 16px;
-}
-QScrollBar::sub-line:horizontal, QScrollBar::add-line:horizontal {
-    width: 16px;
-}
-QScrollBar::sub-line:vertical {
-    subcontrol-position: top;
-}
-QScrollBar::add-line:vertical {
-    subcontrol-position: bottom;
-}
-QScrollBar::sub-line:horizontal {
-    subcontrol-position: left;
-}
-QScrollBar::add-line:horizontal {
-    subcontrol-position: right;
-}
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical,
-QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-    background: transparent;
-}
-"""
-
-
-def _light_style() -> str:
-    """Derive the light theme from the existing dark theme palette."""
-    replacements = (
-        ("#171717", "#f4f4f4"),
-        ("#2b2b2b", "#e8e8e8"),
-        ("#242424", "#ffffff"),
-        ("#303030", "#dedede"),
-        ("#444444", "#c8c8c8"),
-        ("#3a3a3a", "#e2e2e2"),
-        ("#555555", "#9e9e9e"),
-        ("#4a4a4a", "#d0d0d0"),
-        ("#626262", "#b8b8b8"),
-        ("#292929", "#eeeeee"),
-        ("#3b3b3b", "#c0c0c0"),
-        ("#737373", "#777777"),
-        ("#202020", "#ffffff"),
-        ("#f1f1f1", "#202020"),
-        ("#aaaaaa", "#5f6368"),
-        ("#b8b8b8", "#5f6368"),
-        ("#d6b06a", "#8a5a00"),
-        ("#d4d4d4", "#303030"),
-    )
-    style = MAIN_STYLE
-    tokens = []
-    for index, (old, new) in enumerate(replacements):
-        token = f"__THEME_COLOR_{index}__"
-        style = style.replace(old, token)
-        tokens.append((token, new))
-    for token, new in tokens:
-        style = style.replace(token, new)
-    return style
-
-
-LIGHT_STYLE = _light_style()
-LIGHT_STYLE += """
-/* Explicit light-theme overrides for native Qt states and scroll contents. */
-QTabBar::tab {
-    background: #e8e8e8;
-    color: #202020;
-    border: 1px solid #b8b8b8;
-}
-QTabBar::tab:selected {
-    background: #d0d0d0;
-    color: #101010;
-    border-color: #8e8e8e;
-}
-QTabBar::tab:hover {
-    background: #f7f7f7;
-    color: #101010;
-}
-QTabBar::tab:disabled {
-    background: #eeeeee;
-    color: #9a9a9a;
-}
-QTabWidget::pane {
-    background: #ffffff;
-    border: 1px solid #b8b8b8;
-}
-QProgressBar {
-    background: #ffffff;
-    color: #202020;
-    border: 1px solid #b8b8b8;
-}
-QProgressBar::chunk {
-    background: #ffffff;
-}
-QWidget#controlPage QTabWidget,
-QWidget#controlPage QTabWidget::pane,
-QWidget#controlPage QTabWidget QStackedWidget,
-QWidget#controlPage QTabWidget QStackedWidget > QWidget {
-    background: #ffffff;
-}
-QScrollArea#loopScroll, QScrollArea#loopScroll > QWidget > QWidget,
-QSplitter#loopSplitter > QWidget,
-QSplitter#testSplitter > QWidget {
-    background: #f4f4f4;
-}
-QScrollBar:vertical, QScrollBar:horizontal {
-    background: #eeeeee;
-}
-QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-    background: #a0a0a0;
-}
-"""
-
 
 class _SpaceEstop(QObject):
     """空格急停（焦点在输入控件时不触发）。"""
@@ -376,10 +50,11 @@ class _SpaceEstop(QObject):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(APP_NAME)
-        self.setStyleSheet(MAIN_STYLE)
-        self._settings = QSettings("CanMotorKit", "CanMotorKit")
-        self._theme_mode = self._settings.value("theme_mode", "dark")
+        self.setWindowTitle(f"{APP_NAME} {__version__}")
+        self._settings = theme.settings()
+        self._appearance = theme.Appearance.load(self._settings)
+        self._appearance_dialog = None
+        self._start_tab = 0
         self.resize(1500, 920)
         self.bus = None
         self.worker: Worker | None = None
@@ -454,20 +129,29 @@ class MainWindow(QMainWindow):
         topbar.setContentsMargins(0, 0, 4, 0)
         topbar.addWidget(self.card.lbl_title)
         topbar.addStretch(1)
-        self.btn_settings = QPushButton()
-        self.btn_settings.setText("设置")
-        self.btn_settings.setToolTip("界面设置")
+        self.btn_settings = QPushButton("设置")
+        self.btn_settings.setToolTip("外观、主题与软件信息")
         self._theme_menu = QMenu(self.btn_settings)
+        act = self._theme_menu.addAction("外观设置…（背景图 / 透明度 / 强调色）")
+        act.triggered.connect(self.open_appearance)
+        self._theme_menu.addSeparator()
         self._theme_actions = {}
         theme_group = QActionGroup(self._theme_menu)
         theme_group.setExclusive(True)
-        for mode, label in (("dark", "深色模式"), ("light", "浅色模式"),
+        for mode, label in (("light", "浅色（樱花）"), ("dark", "深色模式"),
                             ("system", "跟随系统")):
             action = QAction(label, theme_group)
             action.setCheckable(True)
             action.triggered.connect(lambda _checked=False, value=mode: self._set_theme(value))
             self._theme_menu.addAction(action)
             self._theme_actions[mode] = action
+        self._theme_menu.addSeparator()
+        act = self._theme_menu.addAction("打开日志目录")
+        act.triggered.connect(self._open_log_dir)
+        act = self._theme_menu.addAction("重置窗口布局")
+        act.triggered.connect(self._reset_layout)
+        act = self._theme_menu.addAction(f"关于 {APP_NAME}")
+        act.triggered.connect(self._about)
         self.btn_settings.clicked.connect(self._show_theme_menu)
         topbar.addWidget(self.btn_settings)
         rl.addLayout(topbar)
@@ -489,7 +173,12 @@ class MainWindow(QMainWindow):
         sp.setCollapsible(1, False)
         sp.setStretchFactor(1, 1)
         sp.setSizes([450, 1050])
-        self.setCentralWidget(sp)
+        self.main_splitter = sp
+        self.background = theme.BackgroundWidget()
+        bl = QVBoxLayout(self.background)
+        bl.setContentsMargins(6, 6, 6, 0)
+        bl.addWidget(sp)
+        self.setCentralWidget(self.background)
 
         sb = self.statusBar()
         self.st_conn = QLabel("未连接")
@@ -510,7 +199,7 @@ class MainWindow(QMainWindow):
         self._space = _SpaceEstop(self.safety.estop)
         QApplication.instance().installEventFilter(self._space)
         QApplication.instance().installEventFilter(self)
-        self._set_theme(self._theme_mode, persist=False)
+        self._apply_appearance()
         # 各页面的参数栏与曲线栏使用同一默认比例，并保持拖动比例同步。
         self._pane_splitters = (ctl, self.loop.columns, self.test.columns)
         # Initial ratio after the right pane is laid out at the default window
@@ -525,6 +214,7 @@ class MainWindow(QMainWindow):
         self.tabs.currentChanged.connect(
             lambda _index: QTimer.singleShot(0, self._apply_pane_ratio)
         )
+        self._restore_layout()
         QTimer.singleShot(0, self._apply_pane_ratio)
         if self.conn.pcan_error:
             self.statusBar().showMessage(self.conn.pcan_error + "（仍可使用演示台）", 15000)
@@ -565,22 +255,115 @@ class MainWindow(QMainWindow):
         finally:
             self._syncing_panes = False
 
+    def _is_dark(self) -> bool:
+        mode = self._appearance.mode
+        return mode == "dark" or (mode == "system" and self._system_is_dark())
+
     def _set_theme(self, mode: str, persist: bool = True):
         if mode not in ("dark", "light", "system"):
-            mode = "dark"
-        self._theme_mode = mode
+            mode = "light"
+        self._appearance.mode = mode
         if persist:
-            self._settings.setValue("theme_mode", mode)
-        dark = mode == "dark" or (mode == "system" and self._system_is_dark())
-        self.setStyleSheet(MAIN_STYLE if dark else LIGHT_STYLE)
+            self._appearance.save(self._settings)
+        self._apply_appearance()
+        if self._appearance_dialog is not None:
+            self._appearance_dialog.sync_from(self._appearance)
+
+    def _apply_appearance(self, appearance=None):
+        """按当前外观设置刷新背景图、样式表和各面板绘图颜色。"""
+        if appearance is not None:
+            self._appearance = appearance
+        a = self._appearance
+        dark = self._is_dark()
+        v = a.variant(dark)
+        bg = self.background
+        want_img = bool(v.bg_enabled and a.bg_path)
+        has_img = bg.set_image(a.bg_path if want_img else "")
+        if want_img and not has_img:
+            self.statusBar().showMessage(f"背景图加载失败：{bg.error or a.bg_path}", 8000)
+        if self._appearance_dialog is not None:
+            self._appearance_dialog.set_image_error(bg.error if want_img else "")
+        t = theme.build_theme(a, dark, has_img)
+        theme.set_current(t)
+        pal = t.pal
+        bg.set_look(pal.window, v.bg_opacity / 100.0, pal.overlay, v.overlay / 100.0)
+        self.setStyleSheet(t.stylesheet())
         self._set_native_titlebar(dark)
         for key, action in self._theme_actions.items():
-            action.setChecked(key == mode)
+            action.setChecked(key == a.mode)
         self.motors.apply_theme(dark)
         self.control.apply_theme(dark)
         self.regs.apply_theme(dark)
         for panel in (self.mini_plot, self.loop, self.test, self.scan):
             panel.apply_theme(dark)
+        theme.theme_bus.changed.emit(t)
+
+    def open_appearance(self):
+        if self._appearance_dialog is None:
+            dlg = AppearanceDialog(self._appearance, self._is_dark, self)
+            dlg.appearance_changed.connect(self._apply_appearance)
+            dlg.finished.connect(self._appearance_closed)
+            self._appearance_dialog = dlg
+        self._appearance_dialog.show()
+        self._appearance_dialog.raise_()
+        self._appearance_dialog.activateWindow()
+
+    def _appearance_closed(self, _result=0):
+        self._appearance.save(self._settings)
+        self._appearance_dialog.deleteLater()
+        self._appearance_dialog = None
+
+    # ---------- 布局记忆 ----------
+    def _restore_layout(self):
+        s = self._settings
+        geo = s.value("window/geometry")
+        if geo is not None:
+            self.restoreGeometry(geo)
+        state = s.value("window/main_splitter")
+        if state is not None:
+            self.main_splitter.restoreState(state)
+        try:
+            ratio = float(s.value("window/pane_ratio", self._pane_ratio))
+            if 0.05 < ratio < 0.95:
+                self._pane_ratio = ratio
+        except (TypeError, ValueError):
+            pass
+
+    def _save_layout(self):
+        s = self._settings
+        s.setValue("window/geometry", self.saveGeometry())
+        s.setValue("window/main_splitter", self.main_splitter.saveState())
+        s.setValue("window/pane_ratio", self._pane_ratio)
+        self.conn.save_settings(s)
+        self.card.save_settings(s)
+        self.safety.save_settings(s)
+        self._appearance.save(s)
+
+    def _reset_layout(self):
+        for key in ("window/geometry", "window/main_splitter", "window/pane_ratio"):
+            self._settings.remove(key)
+        self.showNormal()
+        self.resize(1500, 920)
+        self.main_splitter.setSizes([450, 1050])
+        self._pane_ratio = 350 / 1050
+        self._apply_pane_ratio()
+
+    def _open_log_dir(self):
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        from canmotorkit.applog import log_dir
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(log_dir())))
+
+    def _about(self):
+        from canmotorkit.applog import log_dir
+        QMessageBox.about(
+            self, f"关于 {APP_NAME}",
+            f"<b>{APP_NAME}</b> {__version__}<br>"
+            "CAN 电机调试与测试上位机：达妙/HM、大疆 RoboMaster、高擎 GD；"
+            "PCAN / SLCAN / SocketCAN / 演示台。<br><br>"
+            "急停（Esc / 空格）= 零扭矩并锁存，不失能。<br>"
+            f"设置与日志目录：{log_dir()}")
 
     def _set_native_titlebar(self, dark: bool):
         """同步 Windows 原生标题栏，避免浅色内容配深色标题栏。"""
@@ -674,6 +457,7 @@ class MainWindow(QMainWindow):
         self.st_conn.setText("未连接")
 
     def closeEvent(self, ev):
+        self._save_layout()
         self.disconnect_bus()
         super().closeEvent(ev)
 

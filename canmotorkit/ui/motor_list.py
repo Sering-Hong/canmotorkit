@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QGroupBox, QHBoxLay
 from canmotorkit.drivers import dji
 from canmotorkit.drivers.catalog import PROTOCOLS, make_driver
 
+from . import theme
 from .widgets import ArrowOnlyComboBox
 
 ALL_MODELS = [(p, m) for p, (_, ms) in PROTOCOLS.items() for m in ms]
@@ -228,18 +229,9 @@ class MotorListPanel(QGroupBox):
         self._update_selection_style()
 
     def apply_theme(self, dark: bool):
-        if dark:
-            header = ("QHeaderView::section{background:#303030;color:#f1f1f1;"
-                      "border:1px solid #666666;border-right:2px solid #707070;"
-                      "padding:4px 6px;}QHeaderView::section:hover{background:#3e3e3e;}")
-            grid = "QTableWidget{gridline-color:#666666;}"
-        else:
-            header = ("QHeaderView::section{background:#e1e1e1;color:#202020;"
-                      "border:1px solid #a0a0a0;border-right:2px solid #888888;"
-                      "padding:4px 6px;}QHeaderView::section:hover{background:#d2d2d2;}")
-            grid = "QTableWidget{gridline-color:#b0b0b0;}"
-        self.tbl.horizontalHeader().setStyleSheet(header)
-        self.tbl.setStyleSheet(grid)
+        # 表头/网格颜色由全局主题样式表提供，这里只刷新选中行高亮。
+        self.tbl.horizontalHeader().setStyleSheet("")
+        self.tbl.setStyleSheet("")
         self._update_selection_style()
 
     def on_state(self, s: dict):
@@ -387,10 +379,12 @@ class MotorListPanel(QGroupBox):
             if cb is None:
                 continue
             highlighted = row in (self._debug_row, self._temporary_row)
+            t = theme.current()
+            acc, on = t.accent, t.accent_on
             if highlighted:
                 cb.setStyleSheet(
-                    "QComboBox{background:#356a9a;color:#ffffff;"
-                    "selection-background-color:#356a9a;selection-color:#ffffff;}"
+                    f"QComboBox{{background:{acc};color:{on};font-weight:600;"
+                    f"selection-background-color:{acc};selection-color:{on};}}"
                 )
             else:
                 cb.setStyleSheet("")
@@ -399,8 +393,8 @@ class MotorListPanel(QGroupBox):
                 if field is None:
                     continue
                 field.setStyleSheet(
-                    "QLineEdit{background:#356a9a;color:#ffffff;border:1px solid #6ea8d6;"
-                    "border-radius:2px;padding:2px 4px;}"
+                    f"QLineEdit{{background:{acc};color:{on};border:1px solid {acc};"
+                    "border-radius:4px;padding:2px 4px;font-weight:600;}"
                     if highlighted else ""
                 )
 

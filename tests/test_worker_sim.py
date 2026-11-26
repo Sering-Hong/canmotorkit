@@ -126,6 +126,24 @@ def test_dm_mit_mode(app, hm):
     w.disable()
 
 
+def test_dm_mit_equivalent_torque_respects_output_limit(app, hm):
+    """kp·Δp 产生的扭矩也必须受左侧扭矩限幅约束（原来只限前馈 t）。"""
+    w, m = hm.w, hm.bus.motor(DmSimMotor, 1)
+    w.set_safety_limits(SafetyLimits(vel_max=20.0, out_max=1.0, temp_max=0))
+    w.set_mode("mit")
+    w.set_target_mit(P.MitCommand(p=1.5, kp=100, kd=0.5))    # 不限幅时约 150 Nm
+    w.enable()
+    peak = [0.0]
+
+    def watch():
+        peak[0] = max(peak[0], abs(m.tau))
+        return False
+    pump(app, 1.0, watch)
+    assert w.active and peak[0] > 0.5
+    assert peak[0] <= 1.0 + 0.2, peak[0]       # 允许一个通信周期的估算滞后
+    w.disable()
+
+
 def test_overspeed_trip(app, hm):
     w, m = hm.w, hm.bus.motor(DmSimMotor, 1)
     w.set_safety_limits(SafetyLimits(vel_max=2.0, out_max=2.0, temp_max=0))
