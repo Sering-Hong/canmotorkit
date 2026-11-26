@@ -4,3 +4,5 @@ __pycache__/
 *.csv
 can_log.txt
 .venv/
+build/
+dist/

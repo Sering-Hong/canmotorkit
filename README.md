@@ -3,6 +3,15 @@
 基于 PEAK PCAN / Windows SLCAN / Linux SocketCAN 的 CAN 电机调试与测试工具。约定见 `AGENTS.md`，待办见 `TODO.md`，厂家资料见 `reference/`。
 当前支持达妙/HM（MIT + 0x7FF，HM9816G9 实机验证通信）、大疆 RoboMaster、高擎 GD；PCAN / SLCAN / SocketCAN / 演示台。
 
+## 下载
+Windows 可直接下载 Release 中的 `CanMotorKit-<版本>.exe`（单文件，无需 Python）。连接 PCAN 需另装 PEAK 驱动（提供 PCANBasic.dll）；演示台无需硬件。
+
+## 打包 exe
+```
+.venv\Scripts\python.exe -m pip install pyinstaller
+.venv\Scripts\python.exe tools/build_exe.py      # 产物 dist/CanMotorKit-<版本>.exe
+```
+
 ## 安装 / 运行
 ```
 python -m venv .venv
