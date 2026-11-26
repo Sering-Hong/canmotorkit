@@ -26,6 +26,8 @@ from .plot_widget import PlotWidget
 from .register_tab import RegisterTab
 from . import theme
 from .appearance_dialog import AppearanceDialog
+from .guide_bar import GuideBar
+from .widgets import CheckBox
 from .safety_panel import SafetyPanel
 from .scan_log_tab import ScanLogTab
 from .test_tab import TestTab
@@ -55,6 +57,7 @@ class MainWindow(QMainWindow):
         self._appearance = theme.Appearance.load(self._settings)
         self._appearance_dialog = None
         self._start_tab = 0
+        self._last_state = None
         self.resize(1500, 920)
         self.bus = None
         self.worker: Worker | None = None
@@ -129,9 +132,15 @@ class MainWindow(QMainWindow):
         topbar.setContentsMargins(0, 0, 4, 0)
         topbar.addWidget(self.card.lbl_title)
         topbar.addStretch(1)
+        self.chk_simple = CheckBox("简洁模式")
+        self.chk_simple.setToolTip("只保留连接、选电机、使能和输出控制；\n"
+                                   "取消勾选显示响应测试、闭环测试、参数寄存器、报文等高级功能")
+        topbar.addWidget(self.chk_simple)
         self.btn_settings = QPushButton("设置")
         self.btn_settings.setToolTip("外观、主题与软件信息")
         self._theme_menu = QMenu(self.btn_settings)
+        act = self._theme_menu.addAction("使用说明")
+        act.triggered.connect(self.open_help)
         act = self._theme_menu.addAction("外观设置…（背景图 / 透明度 / 强调色）")
         act.triggered.connect(self.open_appearance)
         self._theme_menu.addSeparator()
@@ -155,6 +164,8 @@ class MainWindow(QMainWindow):
         self.btn_settings.clicked.connect(self._show_theme_menu)
         topbar.addWidget(self.btn_settings)
         rl.addLayout(topbar)
+        self.guide = GuideBar(self)
+        rl.addWidget(self.guide)
         rl.addWidget(self.tabs, 1)
         # Keep the complete right section usable; its internal curve panes
         # are intentionally allowed to shrink with their splitters.
@@ -215,6 +226,10 @@ class MainWindow(QMainWindow):
             lambda _index: QTimer.singleShot(0, self._apply_pane_ratio)
         )
         self._restore_layout()
+        simple = self._settings.value("ui/simple", True) in (True, "true", "1", 1)
+        self.chk_simple.setChecked(simple)
+        self.chk_simple.toggled.connect(self._set_simple)
+        self._set_simple(simple)
         QTimer.singleShot(0, self._apply_pane_ratio)
         if self.conn.pcan_error:
             self.statusBar().showMessage(self.conn.pcan_error + "（仍可使用演示台）", 15000)
@@ -348,6 +363,28 @@ class MainWindow(QMainWindow):
         self._pane_ratio = 350 / 1050
         self._apply_pane_ratio()
 
+    # ---------- 简洁模式 ----------
+    def _set_simple(self, on: bool):
+        """简洁模式只保留日常调试需要的内容，高级功能隐藏但不改变其状态。"""
+        self._settings.setValue("ui/simple", bool(on))
+        for i in range(1, self.tabs.count()):
+            self.tabs.setTabVisible(i, not on)
+        if on:
+            self.tabs.setCurrentIndex(0)
+        self.tabs.tabBar().setVisible(not on)
+        self.safety.set_simple(on)
+        self.card.rate_panel.setVisible(not on)
+        self.motors.sp_to.setVisible(not on)
+
+    def open_help(self):
+        from .help_dialog import HelpDialog
+        dlg = getattr(self, "_help_dialog", None)
+        if dlg is None:
+            dlg = self._help_dialog = HelpDialog(self)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
     def _open_log_dir(self):
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
@@ -421,6 +458,7 @@ class MainWindow(QMainWindow):
         w.gd_done.connect(self._on_gd_done)
         w.scan_progress.connect(self.motors.on_scan_progress)
         w.scan_done.connect(self.motors.on_scan_done)
+        w.scan_done.connect(self._auto_pick)
         w.state.connect(self._on_state)
         w.message.connect(self._on_message)
         w.limits_changed.connect(self._on_limits)
@@ -434,6 +472,11 @@ class MainWindow(QMainWindow):
         self.st_conn.setText(f"{bus.name} 已连接")
         self._on_message(f"已连接 {p['channel_name']}，开始自动扫描")
         self.motors.scan_bus()
+
+    def _auto_pick(self, found):
+        """总线上只有一台电机时直接选中它（只选中，不使能、不输出）。"""
+        if len(found) == 1 and self.driver is None and self.worker is not None:
+            QTimer.singleShot(0, lambda: self.motors._use_row(0))
 
     def disconnect_bus(self):
         w = self.worker
@@ -455,6 +498,7 @@ class MainWindow(QMainWindow):
             p_.set_bound(None)
         self.conn.set_connected(False)
         self.st_conn.setText("未连接")
+        self._last_state = None
 
     def closeEvent(self, ev):
         self._save_layout()
@@ -513,6 +557,7 @@ class MainWindow(QMainWindow):
         self.loop.on_samples(samples)
 
     def _on_state(self, s: dict):
+        self._last_state = s
         for p_ in (self.card, self.control, self.safety, self.motors, self.test, self.loop, self.regs):
             p_.on_state(s)
         run = self.worker._run_obj if self.worker else None

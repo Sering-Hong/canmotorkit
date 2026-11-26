@@ -37,6 +37,7 @@ def main():
            "--exclude-module", "PyQt5", "--exclude-module", "PyQt6", "--exclude-module", "matplotlib",
            "--exclude-module", "scipy", "--exclude-module", "OpenGL", "--exclude-module", "tkinter",
            "--exclude-module", "pytest",
+           "--add-data", os.path.join(ROOT, "使用说明.md") + os.pathsep + ".",
            os.path.join(ROOT, "main.py")]
     print(" ".join(cmd))
     subprocess.check_call(cmd, cwd=ROOT)

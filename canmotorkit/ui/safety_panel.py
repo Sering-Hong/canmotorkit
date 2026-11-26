@@ -123,6 +123,7 @@ class SafetyPanel(QGroupBox):
         r2.addWidget(self.btn_reset)
         lay.addLayout(r2)
         lay.addLayout(f)
+        self._form = f
         self._content_layout = lay
 
         self.btn_estop.clicked.connect(self.estop)
@@ -158,6 +159,11 @@ class SafetyPanel(QGroupBox):
             self.lbl_state.setText("安全：")
             self.lbl_state.setStyleSheet("")
         self._update_buttons()
+
+    def set_simple(self, on: bool):
+        """简洁模式隐藏温度、反馈超时、位置窗口（保留默认值并继续生效），只留速度与输出限幅。"""
+        for row in range(5):
+            self._form.setRowVisible(row, not on)
 
     def set_output_controls(self, output_panel, service_panel, rate_panel):
         """把电机操作控件全部放在安全限制分组内。"""
