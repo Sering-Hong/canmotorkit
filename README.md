@@ -1,7 +1,7 @@
 # CanMotorKit
 
 基于 PEAK PCAN / Windows SLCAN / Linux SocketCAN 的 CAN 电机调试与测试工具。约定见 `AGENTS.md`，待办见 `TODO.md`，厂家资料见 `reference/`。
-当前支持达妙/HM（MIT + 0x7FF，HM9816G9 实机验证通信）、大疆 RoboMaster、高擎 GD；PCAN / SLCAN / SocketCAN / 演示台。
+当前支持达妙/HM（MIT + 0x7FF，HM9816G9 实机验证通信）、大疆 RoboMaster、高擎 GD；PCAN / SLCAN / 达妙 USB2CAN（未实机验证）/ SocketCAN / 演示台。
 
 **第一次用先看 [使用说明.md](使用说明.md)**（接线、步骤、安全、常见问题），软件内「设置 → 使用说明」或引导条上的「?」也能打开。
 

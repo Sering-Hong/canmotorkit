@@ -1,9 +1,10 @@
 """① CAN 连接：PCAN / SLCAN / SocketCAN 通道（含「演示台」）/ 波特率 / 连接。"""
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFormLayout, QGroupBox, QHBoxLayout, QPushButton, QWidget
 
+from canmotorkit.core.dm_usb2can import candidate_ports as dm_usb2can_ports
 from canmotorkit.core.pcan_basic import BAUDRATES
 from canmotorkit.core.slcan import CAN_BITRATES, canable_ports
 from canmotorkit.core.socketcan import socketcan_interfaces
@@ -86,9 +87,18 @@ class ConnectionPanel(QGroupBox):
         for name, handle, _desc in attached:
             channel = name.removeprefix("PCAN_")
             self.cb_channel.addItem(f"PCAN（{channel}）", ("pcan", handle))
+        # 达妙 USB2CAN 是普通虚拟串口：ST 虚拟串口排前；其他串口也列出但不默认选中。
+        unlikely = set()
+        for dev in dm_usb2can_ports():
+            tag = "" if dev["likely"] else " ?"
+            self.cb_channel.addItem(f"达妙 USB2CAN（{dev['port']}{tag}）", ("dmusb", dev["port"]))
+            idx = self.cb_channel.count() - 1
+            self.cb_channel.setItemData(idx, dev["description"], Qt.ToolTipRole)
+            if not dev["likely"]:
+                unlikely.add(idx)
         self.cb_channel.addItem(SIM_LABEL, ("sim", 0))
         real_index = next((i for i in range(self.cb_channel.count())
-                           if self.cb_channel.itemData(i)[0] != "sim"), None)
+                           if self.cb_channel.itemData(i)[0] != "sim" and i not in unlikely), None)
         if real_index is None:
             self.select_sim()
         else:
@@ -111,6 +121,8 @@ class ConnectionPanel(QGroupBox):
         self.cb_baud.setEnabled(not is_socketcan)
         if is_socketcan:
             self.cb_baud.setToolTip("SocketCAN 波特率由 Linux 配置，例如 can0 使用 ip link set can0 ...")
+        elif data and data[0] == "dmusb":
+            self.cb_baud.setToolTip("连接时向达妙 USB2CAN 下发该 CAN 波特率；电机常用 1M")
         elif data and data[0] == "slcan":
             self.cb_baud.setToolTip("CANable 的串口默认 115200；这里设置 CAN 总线波特率")
         else:

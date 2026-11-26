@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLabel, QLineEdit
 
 from canmotorkit import APP_NAME, __version__
 from canmotorkit.core.bus import PcanBus
+from canmotorkit.core.dm_usb2can import DmUsb2CanBus
 from canmotorkit.core.worker import Worker
 from canmotorkit.core.slcan import SlcanBus
 from canmotorkit.core.socketcan import SocketCanBus
@@ -440,6 +441,8 @@ class MainWindow(QMainWindow):
                 bus = SocketCanBus(p["channel"])
             elif p.get("kind") == "slcan":
                 bus = SlcanBus(p["channel"], p["bitrate"])
+            elif p.get("kind") == "dmusb":
+                bus = DmUsb2CanBus(p["channel"], p["bitrate"])
             elif p["sim"]:
                 bus = DemoBus()
             else:
@@ -471,6 +474,10 @@ class MainWindow(QMainWindow):
         w.start()
         self.st_conn.setText(f"{bus.name} 已连接")
         self._on_message(f"已连接 {p['channel_name']}，开始自动扫描")
+        if p.get("kind") == "dmusb" and self.card.sp_rate.value() > 500:
+            # 达妙 USB2CAN 每毫秒最多转发 1 帧，1 kHz 下查询/控制帧会互相覆盖。
+            self.card.sp_rate.setValue(500)
+            self.statusBar().showMessage("达妙 USB2CAN：通信频率已调为 500 Hz（适配器每毫秒最多转发 1 帧）", 10000)
         self.motors.scan_bus()
 
     def _auto_pick(self, found):

@@ -75,10 +75,11 @@ class GuideBar(QFrame):
             data = conn.cb_channel.currentData()
             name = conn.cb_channel.currentText() or "（无可用通道）"
             if data and data[0] == "sim":
-                return (0, "没有检测到 USB 转 CAN 适配器（PCAN / CANable）。接好适配器后点左侧「刷新」；"
+                return (0, "没有检测到 USB 转 CAN 适配器（达妙 USB2CAN / PCAN / CANable）。接好后点左侧「刷新」；"
                         "只想熟悉操作可以先连接「演示台」虚拟电机。点「?」看接线说明。",
                         "连接演示台", lambda: conn.btn_connect.click())
-            return (0, f"已检测到适配器：{name}。确认电机已上电、波特率正确（一般 1M），然后连接。",
+            tip = ("；COM 口带「?」的不确定是不是 USB2CAN，可在设备管理器拔插确认" if data[0] == "dmusb" else "")
+            return (0, f"已选择：{name}。确认电机已上电、波特率正确（一般 1M），然后连接{tip}。",
                     "连接", lambda: conn.btn_connect.click())
         s = w._last_state or {}
         if w.driver is None:
